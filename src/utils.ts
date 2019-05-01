@@ -6,21 +6,32 @@ import * as Web3 from 'web3'
 import * as WyvernSchemas from 'wyvern-schemas'
 import { WyvernAtomicizerContract } from 'wyvern-js/lib/abi_gen/wyvern_atomicizer'
 import { AnnotatedFunctionABI, FunctionInputKind, HowToCall } from 'wyvern-js/lib/types'
+import { ERC1155 } from './contracts'
 
 import { OpenSeaPort } from '../src'
-import { ECSignature, Order, OrderSide, SaleKind, Web3Callback, TxnCallback, OrderJSON, UnhashedOrder, OpenSeaAsset, OpenSeaAssetBundle, UnsignedOrder, WyvernAsset } from './types'
+import { ECSignature, Order, OrderSide, SaleKind, Web3Callback, TxnCallback, OrderJSON, UnhashedOrder, OpenSeaAsset, OpenSeaAssetBundle, UnsignedOrder, WyvernAsset, Asset, WyvernBundle, WyvernAssetLocation, WyvernENSNameAsset, WyvernNFTAsset } from './types'
 
 export const NULL_ADDRESS = WyvernProtocol.NULL_ADDRESS
 export const NULL_BLOCK_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
-export const feeRecipient = '0x5b3256965e7c3cf26e11fcaf296dfc8807c01073'
-export const INFURA_KEY = 'e8695bce67944848aa95459fac052f8e'
+export const OPENSEA_FEE_RECIPIENT = '0x5b3256965e7c3cf26e11fcaf296dfc8807c01073'
+export const DEP_INFURA_KEY = 'e8695bce67944848aa95459fac052f8e'
+export const MAINNET_PROVIDER_URL = 'https://eth-mainnet.alchemyapi.io/jsonrpc/y5dLONzfAJh-oCY02DCP3UWCT2pSEXMo'
+export const RINKEBY_PROVIDER_URL = 'https://eth-rinkeby.alchemyapi.io/jsonrpc/-yDg7wmgGw5LdsP4p4kyxRYuDzCkXtoI'
 export const INVERSE_BASIS_POINT = 10000
 export const MAX_UINT_256 = WyvernProtocol.MAX_UINT_256
 export const WYVERN_EXCHANGE_ADDRESS_MAINNET = "0x7be8076f4ea4a4ad08075c2508e481d6c946d12b"
 export const WYVERN_EXCHANGE_ADDRESS_RINKEBY = "0x5206e78b21ce315ce284fb24cf05e0585a93b1d9"
+export const ENJIN_COIN_ADDRESS = '0xf629cbd94d3791c9250152bd8dfbdf380e2a3b9c'
+export const ENJIN_ADDRESS = '0x8562c38485B1E8cCd82E44F89823dA76C98eb0Ab'
 export const DEFAULT_BUYER_FEE_BASIS_POINTS = 0
 export const DEFAULT_SELLER_FEE_BASIS_POINTS = 250
+export const OPENSEA_SELLER_BOUNTY_BASIS_POINTS = 100
+export const DEFAULT_MAX_BOUNTY = DEFAULT_SELLER_FEE_BASIS_POINTS
 export const MAX_ERROR_LENGTH = 120
+export const MIN_EXPIRATION_SECONDS = 10
+export const ORDER_MATCHING_LATENCY_SECONDS = 60 * 60 * 24 * 7
+export const SELL_ORDER_BATCH_SIZE = 3
+export const DEFAULT_GAS_INCREASE_FACTOR = 1.1
 
 const proxyABI: any = {'constant': false, 'inputs': [{'name': 'dest', 'type': 'address'}, {'name': 'howToCall', 'type': 'uint8'}, {'name': 'calldata', 'type': 'bytes'}], 'name': 'proxy', 'outputs': [{'name': 'success', 'type': 'bool'}], 'payable': false, 'stateMutability': 'nonpayable', 'type': 'function'}
 const proxyAssertABI: any = {'constant': false, 'inputs': [{'name': 'dest', 'type': 'address'}, {'name': 'howToCall', 'type': 'uint8'}, {'name': 'calldata', 'type': 'bytes'}], 'name': 'proxyAssert', 'outputs': [], 'payable': false, 'stateMutability': 'nonpayable', 'type': 'function'}
@@ -34,7 +45,7 @@ const txCallbacks: {[key: string]: TxnCallback[]} = {}
  * @param inner callback function that accepts a Web3 callback function and passes
  * it to the Web3 function
  */
-export async function promisify<T>(
+async function promisify<T>(
     inner: (fn: Web3Callback<T>) => void
   ) {
   return new Promise<T>((resolve, reject) =>
@@ -43,6 +54,38 @@ export async function promisify<T>(
       resolve(res)
     })
   )
+}
+
+/**
+ * Promisify a call a method on a contract,
+ * handling Parity errors. Returns '0x' if error.
+ * Note that if T is not "string", this may return a falsey
+ * value when the contract doesn't support the method (e.g. `isApprovedForAll`).
+ * @param callback An anonymous function that takes a web3 callback
+ * and returns a Web3 Contract's call result, e.g. `c => erc721.ownerOf(3, c)`
+ * @param onError callback when user denies transaction
+ */
+export async function promisifyCall<T>(
+    callback: (fn: Web3Callback<T>) => void,
+    onError?: (error: Error) => void
+  ): Promise<T | undefined> {
+
+  try {
+
+    const result: any = await promisify<T>(callback)
+    if (result == '0x') {
+      // Geth compatibility
+      return undefined
+    }
+    return result as T
+
+  } catch (error) {
+    // Probably method not found, and web3 is a Parity node
+    if (onError) {
+      onError(error)
+    }
+    return undefined
+  }
 }
 
 const track = (web3: Web3, txHash: string, onFinalized: TxnCallback) => {
@@ -88,7 +131,9 @@ export const assetFromJSON = (asset: any): OpenSeaAsset => {
   const isSvg = asset.image_url && asset.image_url.endsWith('.svg')
   const fromJSON: OpenSeaAsset = {
     tokenId: asset.token_id.toString(),
+    tokenAddress: asset.asset_contract.address,
     name: asset.name,
+    description: asset.description,
     owner: asset.owner,
     assetContract: {
       name: asset.asset_contract.name,
@@ -97,6 +142,10 @@ export const assetFromJSON = (asset: any): OpenSeaAsset => {
       tokenSymbol: asset.asset_contract.symbol,
       buyerFeeBasisPoints: asset.asset_contract.buyer_fee_basis_points,
       sellerFeeBasisPoints: asset.asset_contract.seller_fee_basis_points,
+      openseaBuyerFeeBasisPoints: asset.asset_contract.opensea_buyer_fee_basis_points,
+      openseaSellerFeeBasisPoints: asset.asset_contract.opensea_seller_fee_basis_points,
+      devBuyerFeeBasisPoints: asset.asset_contract.dev_buyer_fee_basis_points,
+      devSellerFeeBasisPoints: asset.asset_contract.dev_seller_fee_basis_points,
       imageUrl: asset.asset_contract.image_url,
       stats: asset.asset_contract.stats,
       traits: asset.asset_contract.traits,
@@ -122,6 +171,13 @@ export const assetFromJSON = (asset: any): OpenSeaAsset => {
     numSales: asset.num_sales,
     lastSale: asset.last_sale,
     backgroundColor: asset.background_color ? `#${asset.background_color}` : null,
+
+    transferFee: asset.transfer_fee
+      ? makeBigNumber(asset.transfer_fee)
+      : null,
+    transferFeePaymentToken: asset.transfer_fee_payment_token
+      ? tokenFromJSON(asset.transfer_fee_payment_token)
+      : null,
   }
   // If orders were included, put them in sell/buy order groups
   if (fromJSON.orders && !fromJSON.sellOrders) {
@@ -166,6 +222,8 @@ export const tokenFromJSON = (token: any): WyvernSchemas.FungibleToken => {
 
 export const orderFromJSON = (order: any): Order => {
 
+  const createdDate = new Date(`${order.created_date}Z`)
+
   const fromJSON: Order = {
     hash: order.order_hash || order.hash,
     cancelledOrFinalized: order.cancelled || order.finalized,
@@ -181,6 +239,8 @@ export const orderFromJSON = (order: any): Order => {
     takerRelayerFee: new BigNumber(order.taker_relayer_fee),
     makerProtocolFee: new BigNumber(order.maker_protocol_fee),
     takerProtocolFee: new BigNumber(order.taker_protocol_fee),
+    makerReferrerFee: new BigNumber(order.maker_referrer_fee || 0),
+    waitingForBestCounterOrder: order.fee_recipient.address == NULL_ADDRESS,
     feeMethod: order.fee_method,
     feeRecipientAccount: order.fee_recipient,
     feeRecipient: order.fee_recipient.address,
@@ -195,17 +255,25 @@ export const orderFromJSON = (order: any): Order => {
     paymentToken: order.payment_token,
     basePrice: new BigNumber(order.base_price),
     extra: new BigNumber(order.extra),
+    currentBounty: new BigNumber(order.current_bounty || 0),
+    currentPrice: new BigNumber(order.current_price || 0),
+
+    createdTime: new BigNumber(Math.round(createdDate.getTime() / 1000)),
     listingTime: new BigNumber(order.listing_time),
     expirationTime: new BigNumber(order.expiration_time),
+
     salt: new BigNumber(order.salt),
     v: parseInt(order.v),
     r: order.r,
     s: order.s,
 
+    paymentTokenContract: order.payment_token_contract ? tokenFromJSON(order.payment_token_contract) : undefined,
     asset: order.asset ? assetFromJSON(order.asset) : undefined,
     assetBundle: order.asset_bundle ? assetBundleFromJSON(order.asset_bundle) : undefined
   }
 
+  // Use most recent price calc, to account for latency
+  // TODO is this necessary?
   fromJSON.currentPrice = estimateCurrentPrice(fromJSON)
 
   return fromJSON
@@ -215,8 +283,8 @@ export const orderFromJSON = (order: any): Order => {
  * Convert an order to JSON, hashing it as well if necessary
  * @param order order (hashed or unhashed)
  */
-export const orderToJSON = (order: Order | UnhashedOrder): OrderJSON => {
-  const asJSON: any = {
+export const orderToJSON = (order: Order): OrderJSON => {
+  const asJSON: OrderJSON = {
     exchange: order.exchange.toLowerCase(),
     maker: order.maker.toLowerCase(),
     taker: order.taker.toLowerCase(),
@@ -224,12 +292,13 @@ export const orderToJSON = (order: Order | UnhashedOrder): OrderJSON => {
     takerRelayerFee: order.takerRelayerFee.toString(),
     makerProtocolFee: order.makerProtocolFee.toString(),
     takerProtocolFee: order.takerProtocolFee.toString(),
-    feeMethod: order.feeMethod.toString(),
+    makerReferrerFee: order.makerReferrerFee.toString(),
+    feeMethod: order.feeMethod,
     feeRecipient: order.feeRecipient.toLowerCase(),
-    side: order.side.toString(),
-    saleKind: order.saleKind.toString(),
+    side: order.side,
+    saleKind: order.saleKind,
     target: order.target.toLowerCase(),
-    howToCall: order.howToCall.toString(),
+    howToCall: order.howToCall,
     calldata: order.calldata,
     replacementPattern: order.replacementPattern,
     staticTarget: order.staticTarget.toLowerCase(),
@@ -237,27 +306,31 @@ export const orderToJSON = (order: Order | UnhashedOrder): OrderJSON => {
     paymentToken: order.paymentToken.toLowerCase(),
     basePrice: order.basePrice.toString(),
     extra: order.extra.toString(),
+    createdTime: order.createdTime
+      ? order.createdTime.toString()
+      : undefined,
     listingTime: order.listingTime.toString(),
     expirationTime: order.expirationTime.toString(),
-    salt: order.salt.toString()
+    salt: order.salt.toString(),
+
+    metadata: order.metadata,
+
+    v: order.v,
+    r: order.r,
+    s: order.s,
+
+    hash: order.hash
   }
-  const hash = 'hash' in order ? order.hash : getOrderHash(asJSON)
-  if ('v' in order) {
-    asJSON.v = order.v
-    asJSON.r = order.r
-    asJSON.s = order.s
-  }
-  asJSON.hash = hash
-  asJSON.metadata = order.metadata
   return asJSON
 }
 
 // Taken from Wyvern demo exchange
 export const findAsset = async (
-  web3: Web3,
-  {account, proxy, wyAsset, schema}:
-  {account: string; proxy: string; wyAsset: any; schema: any}
-  ) => {
+    web3: Web3,
+    {account, proxy, wyAsset, schema}:
+    {account: string; proxy: string; wyAsset: any; schema: any},
+    retries = 1
+  ): Promise<WyvernAssetLocation | undefined> => {
   let owner
   const ownerOf = schema.functions.ownerOf
   if (ownerOf) {
@@ -287,24 +360,33 @@ export const findAsset = async (
   }
   if (owner !== undefined) {
     if (proxy && owner.toLowerCase() === proxy.toLowerCase()) {
-      return 'proxy'
+      return WyvernAssetLocation.Proxy
     } else if (owner.toLowerCase() === account.toLowerCase()) {
-      return 'account'
-    } else if (owner === '0x') {
-      return 'unknown'
+      return WyvernAssetLocation.Account
     } else {
-      return 'other'
+      return _handleOtherOwner(owner)
     }
   } else if (myCount !== undefined && proxyCount !== undefined) {
     if (proxyCount >= 1000000000000000000) {
-      return 'proxy'
+      return WyvernAssetLocation.Proxy
     } else if (myCount >= 1000000000000000000) {
-      return 'account'
+      return WyvernAssetLocation.Account
     } else {
-      return 'other'
+      return WyvernAssetLocation.Other
     }
   }
-  return 'unknown'
+  return _handleOtherOwner(owner)
+
+  async function _handleOtherOwner(o?: string) {
+    if (o && o != '0x') {
+      return WyvernAssetLocation.Other
+    }
+    if (retries <= 0) {
+      return undefined
+    }
+    await delay(500)
+    return findAsset(web3, {account, proxy, wyAsset, schema}, retries - 1)
+  }
 }
 
 /**
@@ -312,9 +394,10 @@ export const findAsset = async (
  * @param web3 Web3 instance
  * @param message message to sign
  * @param signerAddress web3 address signing the message
+ * @returns A signature if provider can sign, otherwise null
  */
 export async function personalSignAsync(web3: Web3, message: string, signerAddress: string
-  ): Promise<ECSignature> {
+  ): Promise<ECSignature | null> {
 
   const signature = await promisify<Web3.JSONRPCResponsePayload>(c => web3.currentProvider.sendAsync({
       method: 'personal_sign', // 'eth_signTypedData',
@@ -322,6 +405,11 @@ export async function personalSignAsync(web3: Web3, message: string, signerAddre
       from: signerAddress,
     } as any, c)
   )
+
+  const error = (signature as any).error
+  if (error) {
+    return null
+  }
 
   return parseSignatureHex(signature.result)
 }
@@ -343,40 +431,83 @@ export function makeBigNumber(arg: number | string | BigNumber): BigNumber {
 /**
  * Send a transaction to the blockchain and optionally confirm it
  * @param web3 Web3 instance
- * @param fromAddress address sending transaction
- * @param toAddress destination contract address
+ * @param param0 __namedParameters
+ * @param from address sending transaction
+ * @param to destination contract address
  * @param data data to send to contract
  * @param gasPrice gas price to use. If unspecified, uses web3 default (mean gas price)
  * @param value value in ETH to send with data. Defaults to 0
- * @param awaitConfirmation whether we should wait for blockchain to confirm. Defaults to false
+ * @param onError callback when user denies transaction
  */
 export async function sendRawTransaction(
     web3: Web3,
-    {from, to, data, gasPrice, value = 0}: Web3.TxData,
-    awaitConfirmation = false
+    {from, to, data, gasPrice, value = 0, gas}: Web3.TxData,
+    onError: (error: Error) => void
   ): Promise<string> {
 
-  const txHashRes = await promisify(c => web3.eth.sendTransaction({
-    from,
-    to,
-    value,
-    data,
-    gasPrice
-  }, c))
-  const txHash = txHashRes.toString()
-
-  if (awaitConfirmation) {
-    await confirmTransaction(web3, txHash)
+  if (gas == null) {
+    // This gas cannot be increased due to an ethjs error
+    gas = await estimateGas(web3, { from, to, data, value })
   }
 
-  return txHash
+  try {
+    const txHashRes = await promisify(c => web3.eth.sendTransaction({
+      from,
+      to,
+      value,
+      data,
+      gas,
+      gasPrice
+    }, c))
+    const txHash = txHashRes.toString()
+    return txHash
+
+  } catch (error) {
+
+    onError(error)
+    throw error
+  }
+}
+
+/**
+ * Call a method on a contract, sending arbitrary data and
+ * handling Parity errors. Returns '0x' if error.
+ * @param web3 Web3 instance
+ * @param param0 __namedParameters
+ * @param from address sending call
+ * @param to destination contract address
+ * @param data data to send to contract
+ * @param onError callback when user denies transaction
+ */
+export async function rawCall(
+    web3: Web3,
+    { from, to, data }: Web3.CallData,
+    onError?: (error: Error) => void
+  ): Promise<string> {
+
+  try {
+    const result = await promisify<string>(c => web3.eth.call({
+      from,
+      to,
+      data
+    }, c))
+    return result
+
+  } catch (error) {
+    // Probably method not found, and web3 is a Parity node
+    if (onError) {
+      onError(error)
+    }
+    // Backwards compatibility with Geth nodes
+    return '0x'
+  }
 }
 
 /**
  * Estimate Gas usage for a transaction
  * @param web3 Web3 instance
- * @param fromAddress address sending transaction
- * @param toAddress destination contract address
+ * @param from address sending transaction
+ * @param to destination contract address
  * @param data data to send to contract
  * @param value value in ETH to send with data
  */
@@ -402,6 +533,33 @@ export async function estimateGas(
 export async function getCurrentGasPrice(web3: Web3): Promise<BigNumber> {
   const meanGas = await promisify<BigNumber>(c => web3.eth.getGasPrice(c))
   return meanGas
+}
+
+/**
+ * Get current transfer fees for an asset
+ * @param web3 Web3 instance
+ * @param asset The asset to check for transfer fees
+ */
+export async function getTransferFeeSettings(
+    web3: Web3,
+    { asset }: { asset: Asset }
+  ) {
+  let transferFee: BigNumber | undefined
+  let transferFeeTokenAddress: string | undefined
+
+  if (asset.tokenAddress.toLowerCase() == ENJIN_ADDRESS.toLowerCase()) {
+    // Enjin asset
+    const feeContract = web3.eth.contract(ERC1155 as any).at(asset.tokenAddress)
+
+    const params = await promisifyCall<any[]>(c => feeContract.transferSettings(asset.tokenId, c))
+    if (params) {
+      transferFee = makeBigNumber(params[3])
+      if (params[2] == 0) {
+        transferFeeTokenAddress = ENJIN_COIN_ADDRESS
+      }
+    }
+  }
+  return { transferFee, transferFeeTokenAddress }
 }
 
 // sourced from 0x.js:
@@ -489,18 +647,56 @@ export function estimateCurrentPrice(order: Order, secondsToBacktrack = 30, shou
 }
 
 /**
- * Get the Wyvern representation of an asset
+ * Get the Wyvern representation of an NFT asset
  * @param schema The WyvernSchema needed to access this asset
  * @param tokenId The token's id
  * @param tokenAddress The address of the token's contract
  */
-export function getWyvernAsset(
-    schema: any, tokenId: string, tokenAddress: string
-  ): WyvernAsset {
+export function getWyvernNFTAsset(
+    schema: WyvernSchemas.Schema<WyvernNFTAsset>, tokenId: string, tokenAddress: string
+  ): WyvernNFTAsset {
+
   return schema.assetFromFields({
     'ID': tokenId.toString(),
-    'Address': tokenAddress,
+    'Address': tokenAddress.toLowerCase(),
   })
+}
+
+/**
+ * Get the Wyvern representation of an ENS name as an asset
+ * @param schema The WyvernSchema needed to access this asset
+ * @param name The ENS name, ending in .eth
+ */
+export function getWyvernENSNameAsset(
+    schema: WyvernSchemas.Schema<WyvernENSNameAsset>, name: string
+  ): WyvernENSNameAsset {
+
+  if (!schema.unifyFields) {
+    throw new Error("Incorrect schema type for this asset")
+  }
+
+  return schema.assetFromFields(schema.unifyFields({
+    'Name': name,
+  }))
+}
+
+/**
+ * Get the Wyvern representation of a group of NFT assets
+ * Sort order is enforced here
+ * @param schema The WyvernSchema needed to access these assets
+ * @param assets Assets to bundle
+ */
+export function getWyvernBundle(
+    schema: any, assets: Asset[]
+  ): WyvernBundle {
+
+  const wyAssets = assets.map(asset => getWyvernNFTAsset(schema, asset.tokenId, asset.tokenAddress))
+
+  const sortedWyAssets = _.sortBy(wyAssets, [(a: WyvernNFTAsset) => a.address, (a: WyvernNFTAsset) => a.id])
+
+  return {
+    assets: sortedWyAssets
+  }
 }
 
 /**
@@ -595,10 +791,10 @@ export async function delay(ms: number) {
  * @param to Destination address
  * @param atomicizer Wyvern Atomicizer instance
  */
-export function encodeAtomicizedTransfer(schema: any, assets: WyvernAsset[], from: string, to: string, atomicizer: WyvernAtomicizerContract) {
+export function encodeAtomicizedTransfer(schema: WyvernSchemas.Schema<any>, assets: WyvernAsset[], from: string, to: string, atomicizer: WyvernAtomicizerContract) {
 
   const transactions = assets.map((asset: any) => {
-    const transfer = schema.functions.transferFrom(asset)
+    const transfer = schema.functions.transfer(asset)
     const calldata = encodeTransferCall(transfer, from, to)
     return {
       calldata,
@@ -628,12 +824,16 @@ export function encodeAtomicizedTransfer(schema: any, assets: WyvernAsset[], fro
 export function encodeTransferCall(transferAbi: AnnotatedFunctionABI, from: string, to: string) {
   const parameters = transferAbi.inputs.map(input => {
     switch (input.kind) {
-      case FunctionInputKind.Asset:
-        return input.value
       case FunctionInputKind.Replaceable:
         return to
       case FunctionInputKind.Owner:
         return from
+      case FunctionInputKind.Asset:
+      default:
+        if (input.value == null) {
+          throw new Error(`Unsupported function input kind: ${input.kind}`)
+        }
+        return input.value
     }
   })
   return WyvernSchemas.encodeCall(transferAbi, parameters)
@@ -649,4 +849,22 @@ export function encodeTransferCall(transferAbi: AnnotatedFunctionABI, from: stri
 export function encodeProxyCall(address: string, howToCall: HowToCall, calldata: string, shouldAssert = true) {
   const abi = shouldAssert ? proxyAssertABI : proxyABI
   return WyvernSchemas.encodeCall(abi, [address, howToCall, Buffer.from(calldata.slice(2), 'hex')])
+}
+
+/**
+ * Validates that an address exists, isn't null, and is properly
+ * formatted for Wyvern and OpenSea
+ * @param address input address
+ */
+export function validateAndFormatWalletAddress(web3: Web3, address: string): string {
+  if (!address) {
+    throw new Error('No wallet address found')
+  }
+  if (!web3.isAddress(address)) {
+    throw new Error('Invalid wallet address')
+  }
+  if (address == NULL_ADDRESS) {
+    throw new Error('Wallet cannot be the null address')
+  }
+  return address.toLowerCase()
 }

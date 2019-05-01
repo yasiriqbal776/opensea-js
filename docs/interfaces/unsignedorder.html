@@ -103,6 +103,7 @@
 								<li class="tsd-kind-property tsd-parent-kind-interface tsd-is-inherited"><a href="unsignedorder.html#listingtime" class="tsd-kind-icon">listing<wbr>Time</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface tsd-is-inherited"><a href="unsignedorder.html#maker" class="tsd-kind-icon">maker</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface tsd-is-inherited"><a href="unsignedorder.html#makerprotocolfee" class="tsd-kind-icon">maker<wbr>Protocol<wbr>Fee</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface tsd-is-inherited"><a href="unsignedorder.html#makerreferrerfee" class="tsd-kind-icon">maker<wbr>Referrer<wbr>Fee</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface tsd-is-inherited"><a href="unsignedorder.html#makerrelayerfee" class="tsd-kind-icon">maker<wbr>Relayer<wbr>Fee</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface tsd-is-inherited"><a href="unsignedorder.html#metadata" class="tsd-kind-icon">metadata</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface tsd-is-inherited"><a href="unsignedorder.html#paymenttoken" class="tsd-kind-icon">payment<wbr>Token</a></li>
@@ -116,6 +117,7 @@
 								<li class="tsd-kind-property tsd-parent-kind-interface tsd-is-inherited"><a href="unsignedorder.html#takerprotocolfee" class="tsd-kind-icon">taker<wbr>Protocol<wbr>Fee</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface tsd-is-inherited"><a href="unsignedorder.html#takerrelayerfee" class="tsd-kind-icon">taker<wbr>Relayer<wbr>Fee</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-interface tsd-is-inherited"><a href="unsignedorder.html#target" class="tsd-kind-icon">target</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-interface tsd-is-inherited"><a href="unsignedorder.html#waitingforbestcounterorder" class="tsd-kind-icon">waiting<wbr>For<wbr>Best<wbr>Counter<wbr>Order</a></li>
 							</ul>
 						</section>
 					</div>
@@ -186,7 +188,7 @@
 						<p>Inherited from <a href="unhashedorder.html">UnhashedOrder</a>.<a href="unhashedorder.html#feemethod">feeMethod</a></p>
 						<p>Overrides Order.feeMethod</p>
 						<ul>
-							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/a10aca3/src/types.ts#L246">types.ts:246</a></li>
+							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/9dbdb0f/src/types.ts#L355">types.ts:355</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -207,7 +209,7 @@
 					<div class="tsd-signature tsd-kind-icon">hash<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">string</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/a10aca3/src/types.ts#L259">types.ts:259</a></li>
+							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/9dbdb0f/src/types.ts#L372">types.ts:372</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -219,7 +221,7 @@
 						<p>Inherited from <a href="unhashedorder.html">UnhashedOrder</a>.<a href="unhashedorder.html#howtocall">howToCall</a></p>
 						<p>Overrides Order.howToCall</p>
 						<ul>
-							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/a10aca3/src/types.ts#L249">types.ts:249</a></li>
+							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/9dbdb0f/src/types.ts#L358">types.ts:358</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -257,6 +259,17 @@
 					</aside>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface tsd-is-inherited">
+					<a name="makerreferrerfee" class="tsd-anchor"></a>
+					<h3>maker<wbr>Referrer<wbr>Fee</h3>
+					<div class="tsd-signature tsd-kind-icon">maker<wbr>Referrer<wbr>Fee<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">BigNumber</span></div>
+					<aside class="tsd-sources">
+						<p>Inherited from <a href="unhashedorder.html">UnhashedOrder</a>.<a href="unhashedorder.html#makerreferrerfee">makerReferrerFee</a></p>
+						<ul>
+							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/9dbdb0f/src/types.ts#L361">types.ts:361</a></li>
+						</ul>
+					</aside>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface tsd-is-inherited">
 					<a name="makerrelayerfee" class="tsd-anchor"></a>
 					<h3>maker<wbr>Relayer<wbr>Fee</h3>
 					<div class="tsd-signature tsd-kind-icon">maker<wbr>Relayer<wbr>Fee<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">BigNumber</span></div>
@@ -274,17 +287,17 @@
 					<aside class="tsd-sources">
 						<p>Inherited from <a href="unhashedorder.html">UnhashedOrder</a>.<a href="unhashedorder.html#metadata">metadata</a></p>
 						<ul>
-							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/a10aca3/src/types.ts#L251">types.ts:251</a></li>
+							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/9dbdb0f/src/types.ts#L364">types.ts:364</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-type-declaration">
 						<h4>Type declaration</h4>
 						<ul class="tsd-parameters">
 							<li class="tsd-parameter">
-								<h5><span class="tsd-flag ts-flagOptional">Optional</span> asset<span class="tsd-signature-symbol">?: </span><a href="wyvernasset.html" class="tsd-signature-type">WyvernAsset</a></h5>
+								<h5><span class="tsd-flag ts-flagOptional">Optional</span> asset<span class="tsd-signature-symbol">?: </span><a href="wyvernnftasset.html" class="tsd-signature-type">WyvernNFTAsset</a></h5>
 							</li>
 							<li class="tsd-parameter">
-								<h5><span class="tsd-flag ts-flagOptional">Optional</span> bundle<span class="tsd-signature-symbol">?: </span><a href="openseaassetbundlejson.html" class="tsd-signature-type">OpenSeaAssetBundleJSON</a></h5>
+								<h5><span class="tsd-flag ts-flagOptional">Optional</span> bundle<span class="tsd-signature-symbol">?: </span><a href="wyvernbundle.html" class="tsd-signature-type">WyvernBundle</a></h5>
 							</li>
 							<li class="tsd-parameter">
 								<h5>schema<span class="tsd-signature-symbol">: </span><a href="../enums/wyvernschemaname.html" class="tsd-signature-type">WyvernSchemaName</a></h5>
@@ -322,7 +335,7 @@
 						<p>Inherited from <a href="unhashedorder.html">UnhashedOrder</a>.<a href="unhashedorder.html#salekind">saleKind</a></p>
 						<p>Overrides Order.saleKind</p>
 						<ul>
-							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/a10aca3/src/types.ts#L248">types.ts:248</a></li>
+							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/9dbdb0f/src/types.ts#L357">types.ts:357</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -345,7 +358,7 @@
 						<p>Inherited from <a href="unhashedorder.html">UnhashedOrder</a>.<a href="unhashedorder.html#side">side</a></p>
 						<p>Overrides Order.side</p>
 						<ul>
-							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/a10aca3/src/types.ts#L247">types.ts:247</a></li>
+							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/9dbdb0f/src/types.ts#L356">types.ts:356</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -415,6 +428,17 @@
 						</ul>
 					</aside>
 				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-interface tsd-is-inherited">
+					<a name="waitingforbestcounterorder" class="tsd-anchor"></a>
+					<h3>waiting<wbr>For<wbr>Best<wbr>Counter<wbr>Order</h3>
+					<div class="tsd-signature tsd-kind-icon">waiting<wbr>For<wbr>Best<wbr>Counter<wbr>Order<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span></div>
+					<aside class="tsd-sources">
+						<p>Inherited from <a href="unhashedorder.html">UnhashedOrder</a>.<a href="unhashedorder.html#waitingforbestcounterorder">waitingForBestCounterOrder</a></p>
+						<ul>
+							<li>Defined in <a href="https://github.com/ProjectOpenSea/opensea-js/blob/9dbdb0f/src/types.ts#L362">types.ts:362</a></li>
+						</ul>
+					</aside>
+				</section>
 			</section>
 		</div>
 		<div class="col-4 col-menu menu-sticky-wrap menu-highlight">
@@ -469,6 +493,9 @@
 								<a href="unsignedorder.html#makerprotocolfee" class="tsd-kind-icon">maker<wbr>Protocol<wbr>Fee</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-interface tsd-is-inherited">
+								<a href="unsignedorder.html#makerreferrerfee" class="tsd-kind-icon">maker<wbr>Referrer<wbr>Fee</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-interface tsd-is-inherited">
 								<a href="unsignedorder.html#makerrelayerfee" class="tsd-kind-icon">maker<wbr>Relayer<wbr>Fee</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-interface tsd-is-inherited">
@@ -506,6 +533,9 @@
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-interface tsd-is-inherited">
 								<a href="unsignedorder.html#target" class="tsd-kind-icon">target</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-interface tsd-is-inherited">
+								<a href="unsignedorder.html#waitingforbestcounterorder" class="tsd-kind-icon">waiting<wbr>For<wbr>Best<wbr>Counter<wbr>Order</a>
 							</li>
 						</ul>
 					</li>

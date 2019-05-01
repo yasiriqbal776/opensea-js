@@ -3,24 +3,38 @@ import * as Web3 from 'web3';
 import * as WyvernSchemas from 'wyvern-schemas';
 import { WyvernAtomicizerContract } from 'wyvern-js/lib/abi_gen/wyvern_atomicizer';
 import { AnnotatedFunctionABI, HowToCall } from 'wyvern-js/lib/types';
-import { ECSignature, Order, Web3Callback, OrderJSON, UnhashedOrder, OpenSeaAsset, OpenSeaAssetBundle, UnsignedOrder, WyvernAsset } from './types';
+import { ECSignature, Order, Web3Callback, OrderJSON, UnhashedOrder, OpenSeaAsset, OpenSeaAssetBundle, UnsignedOrder, WyvernAsset, Asset, WyvernBundle, WyvernAssetLocation, WyvernENSNameAsset, WyvernNFTAsset } from './types';
 export declare const NULL_ADDRESS: string;
 export declare const NULL_BLOCK_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
-export declare const feeRecipient = "0x5b3256965e7c3cf26e11fcaf296dfc8807c01073";
-export declare const INFURA_KEY = "e8695bce67944848aa95459fac052f8e";
+export declare const OPENSEA_FEE_RECIPIENT = "0x5b3256965e7c3cf26e11fcaf296dfc8807c01073";
+export declare const DEP_INFURA_KEY = "e8695bce67944848aa95459fac052f8e";
+export declare const MAINNET_PROVIDER_URL = "https://eth-mainnet.alchemyapi.io/jsonrpc/y5dLONzfAJh-oCY02DCP3UWCT2pSEXMo";
+export declare const RINKEBY_PROVIDER_URL = "https://eth-rinkeby.alchemyapi.io/jsonrpc/-yDg7wmgGw5LdsP4p4kyxRYuDzCkXtoI";
 export declare const INVERSE_BASIS_POINT = 10000;
 export declare const MAX_UINT_256: BigNumber;
 export declare const WYVERN_EXCHANGE_ADDRESS_MAINNET = "0x7be8076f4ea4a4ad08075c2508e481d6c946d12b";
 export declare const WYVERN_EXCHANGE_ADDRESS_RINKEBY = "0x5206e78b21ce315ce284fb24cf05e0585a93b1d9";
+export declare const ENJIN_COIN_ADDRESS = "0xf629cbd94d3791c9250152bd8dfbdf380e2a3b9c";
+export declare const ENJIN_ADDRESS = "0x8562c38485B1E8cCd82E44F89823dA76C98eb0Ab";
 export declare const DEFAULT_BUYER_FEE_BASIS_POINTS = 0;
 export declare const DEFAULT_SELLER_FEE_BASIS_POINTS = 250;
+export declare const OPENSEA_SELLER_BOUNTY_BASIS_POINTS = 100;
+export declare const DEFAULT_MAX_BOUNTY = 250;
 export declare const MAX_ERROR_LENGTH = 120;
+export declare const MIN_EXPIRATION_SECONDS = 10;
+export declare const ORDER_MATCHING_LATENCY_SECONDS: number;
+export declare const SELL_ORDER_BATCH_SIZE = 3;
+export declare const DEFAULT_GAS_INCREASE_FACTOR = 1.1;
 /**
- * Promisify a callback-syntax web3 function
- * @param inner callback function that accepts a Web3 callback function and passes
- * it to the Web3 function
+ * Promisify a call a method on a contract,
+ * handling Parity errors. Returns '0x' if error.
+ * Note that if T is not "string", this may return a falsey
+ * value when the contract doesn't support the method (e.g. `isApprovedForAll`).
+ * @param callback An anonymous function that takes a web3 callback
+ * and returns a Web3 Contract's call result, e.g. `c => erc721.ownerOf(3, c)`
+ * @param onError callback when user denies transaction
  */
-export declare function promisify<T>(inner: (fn: Web3Callback<T>) => void): Promise<T>;
+export declare function promisifyCall<T>(callback: (fn: Web3Callback<T>) => void, onError?: (error: Error) => void): Promise<T | undefined>;
 export declare const confirmTransaction: (web3: Web3, txHash: string) => Promise<{}>;
 export declare const assetFromJSON: (asset: any) => OpenSeaAsset;
 export declare const assetBundleFromJSON: (asset_bundle: any) => OpenSeaAssetBundle;
@@ -30,20 +44,21 @@ export declare const orderFromJSON: (order: any) => Order;
  * Convert an order to JSON, hashing it as well if necessary
  * @param order order (hashed or unhashed)
  */
-export declare const orderToJSON: (order: Order | UnhashedOrder) => OrderJSON;
+export declare const orderToJSON: (order: Order) => OrderJSON;
 export declare const findAsset: (web3: Web3, { account, proxy, wyAsset, schema }: {
     account: string;
     proxy: string;
     wyAsset: any;
     schema: any;
-}) => Promise<"unknown" | "proxy" | "account" | "other">;
+}, retries?: number) => Promise<WyvernAssetLocation | undefined>;
 /**
  * Sign messages using web3 personal signatures
  * @param web3 Web3 instance
  * @param message message to sign
  * @param signerAddress web3 address signing the message
+ * @returns A signature if provider can sign, otherwise null
  */
-export declare function personalSignAsync(web3: Web3, message: string, signerAddress: string): Promise<ECSignature>;
+export declare function personalSignAsync(web3: Web3, message: string, signerAddress: string): Promise<ECSignature | null>;
 /**
  * Special fixes for making BigNumbers using web3 results
  * @param arg An arg or the result of a web3 call to turn into a BigNumber
@@ -52,19 +67,31 @@ export declare function makeBigNumber(arg: number | string | BigNumber): BigNumb
 /**
  * Send a transaction to the blockchain and optionally confirm it
  * @param web3 Web3 instance
- * @param fromAddress address sending transaction
- * @param toAddress destination contract address
+ * @param param0 __namedParameters
+ * @param from address sending transaction
+ * @param to destination contract address
  * @param data data to send to contract
  * @param gasPrice gas price to use. If unspecified, uses web3 default (mean gas price)
  * @param value value in ETH to send with data. Defaults to 0
- * @param awaitConfirmation whether we should wait for blockchain to confirm. Defaults to false
+ * @param onError callback when user denies transaction
  */
-export declare function sendRawTransaction(web3: Web3, { from, to, data, gasPrice, value }: Web3.TxData, awaitConfirmation?: boolean): Promise<string>;
+export declare function sendRawTransaction(web3: Web3, { from, to, data, gasPrice, value, gas }: Web3.TxData, onError: (error: Error) => void): Promise<string>;
+/**
+ * Call a method on a contract, sending arbitrary data and
+ * handling Parity errors. Returns '0x' if error.
+ * @param web3 Web3 instance
+ * @param param0 __namedParameters
+ * @param from address sending call
+ * @param to destination contract address
+ * @param data data to send to contract
+ * @param onError callback when user denies transaction
+ */
+export declare function rawCall(web3: Web3, { from, to, data }: Web3.CallData, onError?: (error: Error) => void): Promise<string>;
 /**
  * Estimate Gas usage for a transaction
  * @param web3 Web3 instance
- * @param fromAddress address sending transaction
- * @param toAddress destination contract address
+ * @param from address sending transaction
+ * @param to destination contract address
  * @param data data to send to contract
  * @param value value in ETH to send with data
  */
@@ -75,6 +102,17 @@ export declare function estimateGas(web3: Web3, { from, to, data, value }: Web3.
  */
 export declare function getCurrentGasPrice(web3: Web3): Promise<BigNumber>;
 /**
+ * Get current transfer fees for an asset
+ * @param web3 Web3 instance
+ * @param asset The asset to check for transfer fees
+ */
+export declare function getTransferFeeSettings(web3: Web3, { asset }: {
+    asset: Asset;
+}): Promise<{
+    transferFee: BigNumber | undefined;
+    transferFeeTokenAddress: string | undefined;
+}>;
+/**
  * Estimates the price of an order
  * @param order The order to estimate price on
  * @param secondsToBacktrack The number of seconds to subtract on current time,
@@ -83,12 +121,25 @@ export declare function getCurrentGasPrice(web3: Web3): Promise<BigNumber>;
  */
 export declare function estimateCurrentPrice(order: Order, secondsToBacktrack?: number, shouldRoundUp?: boolean): BigNumber;
 /**
- * Get the Wyvern representation of an asset
+ * Get the Wyvern representation of an NFT asset
  * @param schema The WyvernSchema needed to access this asset
  * @param tokenId The token's id
  * @param tokenAddress The address of the token's contract
  */
-export declare function getWyvernAsset(schema: any, tokenId: string, tokenAddress: string): WyvernAsset;
+export declare function getWyvernNFTAsset(schema: WyvernSchemas.Schema<WyvernNFTAsset>, tokenId: string, tokenAddress: string): WyvernNFTAsset;
+/**
+ * Get the Wyvern representation of an ENS name as an asset
+ * @param schema The WyvernSchema needed to access this asset
+ * @param name The ENS name, ending in .eth
+ */
+export declare function getWyvernENSNameAsset(schema: WyvernSchemas.Schema<WyvernENSNameAsset>, name: string): WyvernENSNameAsset;
+/**
+ * Get the Wyvern representation of a group of NFT assets
+ * Sort order is enforced here
+ * @param schema The WyvernSchema needed to access these assets
+ * @param assets Assets to bundle
+ */
+export declare function getWyvernBundle(schema: any, assets: Asset[]): WyvernBundle;
 /**
  * Get the non-prefixed hash for the order
  * (Fixes a Wyvern typescript issue and casing issue)
@@ -117,7 +168,7 @@ export declare function delay(ms: number): Promise<{}>;
  * @param to Destination address
  * @param atomicizer Wyvern Atomicizer instance
  */
-export declare function encodeAtomicizedTransfer(schema: any, assets: WyvernAsset[], from: string, to: string, atomicizer: WyvernAtomicizerContract): {
+export declare function encodeAtomicizedTransfer(schema: WyvernSchemas.Schema<any>, assets: WyvernAsset[], from: string, to: string, atomicizer: WyvernAtomicizerContract): {
     calldata: string;
 };
 /**
@@ -135,3 +186,9 @@ export declare function encodeTransferCall(transferAbi: AnnotatedFunctionABI, fr
  * @param shouldAssert Whether to assert success in the proxy call
  */
 export declare function encodeProxyCall(address: string, howToCall: HowToCall, calldata: string, shouldAssert?: boolean): any;
+/**
+ * Validates that an address exists, isn't null, and is properly
+ * formatted for Wyvern and OpenSea
+ * @param address input address
+ */
+export declare function validateAndFormatWalletAddress(web3: Web3, address: string): string;

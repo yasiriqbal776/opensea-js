@@ -20,36 +20,46 @@ export {
 }
 
 /**
- * Events emitted by the SDK. There are four types:
- * 1. transaction events, which tell you when a new transaction was
- *    created, confirmed, or failed
+ * Events emitted by the SDK. There are five types:
+ * 1. Transaction events, which tell you when a new transaction was
+ *    created, confirmed, denied, or failed.
  * 2. pre-transaction events, which are named (like "WrapEth") and indicate
- *    that Web3 is asking for a signature on a transaction
- * 3. One "CreateOrder" event, which fires when a signature is being prompted
- *    to create an off-chain order
+ *    that Web3 is asking for a signature on a transaction that needs to occur before
+ *    an order is made or fulfilled. This includes approval events and account
+ *    initialization.
+ * 3. Basic actions: matching, cancelling, and creating orders.
+ *    The "CreateOrder" event fires when a signature is being prompted
+ *    to create an off-chain order. The "OrderDenied" event fires when a signature
+ *    request is denied by the user.
  * 4. The "TransferAll" event, which fires when a user is about to directly
  *    transfer one or more assets to another account
  */
 export enum EventType {
+  // Transactions and signature requests
   TransactionCreated = "TransactionCreated",
   TransactionConfirmed = "TransactionConfirmed",
+  TransactionDenied = "TransactionDenied",
   TransactionFailed = "TransactionFailed",
 
+  // Pre-transaction events
   InitializeAccount = "InitializeAccount",
-
   WrapEth = "WrapEth",
   UnwrapWeth = "UnwrapWeth",
-
   ApproveCurrency = "ApproveCurrency",
   ApproveAsset = "ApproveAsset",
   ApproveAllAssets = "ApproveAllAssets",
 
+  // Basic actions: matching orders, creating orders, and cancelling orders
   MatchOrders = "MatchOrders",
   CancelOrder = "CancelOrder",
-
+  ApproveOrder = "ApproveOrder",
   CreateOrder = "CreateOrder",
+  // When the signature request for an order is denied
+  OrderDenied = "OrderDenied",
 
+  // When transferring one or more assets
   TransferAll = "TransferAll",
+  TransferOne = "TransferOne",
 }
 
 /**
@@ -60,9 +70,9 @@ export interface EventData {
   toAddress?: string
   proxyAddress?: string
   amount?: BigNumber
-  tokenAddress?: string
-  tokenId?: string
-  assets?: Array<{tokenAddress: string; tokenId: string}>
+  contractAddress?: string
+  assets?: WyvernAsset[]
+  asset?: WyvernAsset
 
   transactionHash?: string
   event?: EventType
@@ -74,9 +84,17 @@ export interface EventData {
   matchMetadata?: string
 }
 
+/**
+ * OpenSea API configuration object
+ * @param apiKey Optional key to use for API
+ * @param networkName `Network` type to use. Defaults to `Network.Main` (mainnet)
+ * @param gasPrice Default gas price to send to the Wyvern Protocol
+ * @param apiBaseUrl Optional base URL to use for the API
+ */
 export interface OpenSeaAPIConfig {
   networkName?: Network
   apiKey?: string
+  apiBaseUrl?: string
   // Sent to WyvernJS
   gasPrice?: BigNumber
 }
@@ -111,12 +129,39 @@ export enum SaleKind {
 
 // Wyvern Schemas (see https://github.com/ProjectOpenSea/wyvern-schemas)
 export enum WyvernSchemaName {
-  ERC721 = 'ERC721'
+  ERC721 = 'ERC721',
+  ERC1155 = 'ERC1155',
+  ENSName = 'ENSName'
 }
 
-export interface WyvernAsset {
+export enum WyvernAssetLocation {
+  Account = 'account',
+  Proxy = 'proxy',
+  Other = 'other'
+}
+
+export interface WyvernAsset {}
+
+export interface WyvernNFTAsset extends WyvernAsset {
   id: string
   address: string
+}
+
+export interface WyvernERC1155Asset extends WyvernNFTAsset {}
+export interface WyvernERC721Asset extends WyvernNFTAsset {}
+
+export interface WyvernENSNameAsset extends WyvernAsset {
+  nodeHash: string
+  nameHash?: string
+  name?: string
+}
+
+// Abstractions over Wyvern assets for bundles
+export interface WyvernBundle {
+  assets: WyvernNFTAsset[]
+  name?: string
+  description?: string
+  external_link?: string
 }
 
 export type WyvernAtomicMatchParameters = [string[], BigNumber[], Array<(number | BigNumber)>, string, string, string, string, string, string, Array<(number | BigNumber)>, string[]]
@@ -135,42 +180,67 @@ export interface OpenSeaAccount {
   // More information explicitly set by this account's owner on OpenSea
   user: null | {
     // Username for this account
-    username: string;
+    username: string
   }
+}
+
+/**
+ * Simple OpenSea asset spec
+ */
+export interface Asset {
+  // The asset's token ID
+  tokenId: string
+  // The asset's contract address
+  tokenAddress: string
+}
+
+/**
+ * OpenSea asset contract
+ */
+export interface OpenSeaAssetContract {
+  // Name of the asset's contract
+  name: string
+  // Address of this contract
+  address: string
+
+  // Total fee levied on sellers by this contract, in basis points
+  sellerFeeBasisPoints: number
+  // Total fee levied on buyers by this contract, in basis points
+  buyerFeeBasisPoints: number
+  // Fee for OpenSea levied on sellers
+  openseaSellerFeeBasisPoints: number
+  // Fee for OpenSea levied on buyers
+  openseaBuyerFeeBasisPoints: number
+  // Fee for the asset contract owner levied on sellers
+  devSellerFeeBasisPoints: number
+  // Fee for the asset contract owner levied on buyers
+  devBuyerFeeBasisPoints: number
+
+  // Description of the contract
+  description: string
+  // Contract's Etherscan / OpenSea symbol
+  tokenSymbol: string
+  // Image for the contract
+  imageUrl: string
+  // Object with stats about the contract
+  stats?: object
+  // Array of trait types for the contract
+  traits?: object[]
+  // Link to the contract's main website
+  externalLink?: string
+  // Link to the contract's wiki, if available
+  wikiLink?: string
 }
 
 /**
  * The OpenSea asset fetched by the API
  */
-export interface OpenSeaAsset {
-  assetContract: {
-    // Name of the asset's contract
-    name: string;
-    // Address of this contract
-    address: OpenSeaAccount;
-    // Fee levied on sellers by this contract, in basis points
-    sellerFeeBasisPoints: number;
-    // Fee levied on buyers by this contract, in basis points
-    buyerFeeBasisPoints: number;
-    // Description of the contract
-    description: string;
-    // Contract's Etherscan / OpenSea symbol
-    tokenSymbol: string;
-    // Image for the contract
-    imageUrl: string;
-    // Object with stats about the contract
-    stats?: object;
-    // Array of trait types for the contract
-    traits?: object[];
-    // Link to the contract's main website
-    externalLink?: string;
-    // Link to the contract's wiki, if available
-    wikiLink?: string;
-  }
+export interface OpenSeaAsset extends Asset {
+  assetContract: OpenSeaAssetContract
   // The asset's given name
   name: string
-  // The asset's token ID
-  tokenId: string
+  // Description of the asset
+  description: string
   // Owner of the asset
   owner: OpenSeaAccount
   // Orders on the asset. Null if asset was fetched in a list
@@ -202,7 +272,11 @@ export interface OpenSeaAsset {
   // Data about the last time this token was sold
   lastSale: object | null
   // The suggested background color for the image url
-  backgroundColor: string | null
+  backgroundColor: string | null,
+  // The per-transfer fee, in base units, for this asset in its transfer method
+  transferFee: BigNumber | string | null,
+  // The transfer fee token for this asset in its transfer method
+  transferFeePaymentToken: FungibleToken | null
 }
 
 /**
@@ -224,15 +298,20 @@ export interface OpenSeaAssetBundle {
 }
 
 export interface OpenSeaAssetBundleJSON {
-  assets: WyvernAsset[]
+  assets: OpenSeaAsset[]
   name: string
   description?: string
   external_link?: string
 
   // From API only
   maker?: OpenSeaAccount
+}
 
-  // For querying
+/**
+ * Query interface for Bundles
+ */
+export interface OpenSeaAssetBundleQuery extends Partial<OpenSeaAssetBundleJSON> {
+
   asset_contract_address?: string
   token_ids?: Array<number | string>
   on_sale?: boolean
@@ -242,16 +321,48 @@ export interface OpenSeaAssetBundleJSON {
   search?: string
 }
 
+/**
+ * The basis point values of each type of fee
+ * added to each order.
+ * The first pair of values are the total of
+ * the second two pairs
+ */
+export interface OpenSeaFees {
+  // Total fees. dev + opensea
+  totalBuyerFeeBPS: number
+  totalSellerFeeBPS: number
+
+  // Fees that go to the asset contract's developer
+  devSellerFeeBPS: number
+  devBuyerFeeBPS: number
+
+  // Fees that go to OpenSea
+  openseaSellerFeeBPS: number
+  openseaBuyerFeeBPS: number
+
+  // Fees that the item's creator takes on every transfer
+  transferFee: BigNumber
+  transferFeeTokenAddress: string | null
+
+  // Fees that go to whoever refers the order to the taker.
+  // Comes out of OpenSea fees
+  sellerBountyBPS: number
+}
+
 export interface UnhashedOrder extends WyvernOrder {
   feeMethod: FeeMethod
   side: OrderSide
   saleKind: SaleKind
   howToCall: HowToCall
 
+  // OpenSea-specific
+  makerReferrerFee: BigNumber
+  waitingForBestCounterOrder: boolean
+
   metadata: {
-    asset?: WyvernAsset;
-    bundle?: OpenSeaAssetBundleJSON;
-    schema: WyvernSchemaName;
+    asset?: WyvernNFTAsset
+    bundle?: WyvernBundle
+    schema: WyvernSchemaName
   }
 }
 
@@ -259,11 +370,18 @@ export interface UnsignedOrder extends UnhashedOrder {
   hash: string
 }
 
-export interface Order extends UnsignedOrder, ECSignature {
+/**
+ * Orders don't need to be signed if they're pre-approved
+ * with a transaction on the contract to approveOrder_
+ */
+export interface Order extends UnsignedOrder, Partial<ECSignature> {
   // Read-only server-side appends
+  createdTime?: BigNumber
   currentPrice?: BigNumber
+  currentBounty?: BigNumber
   makerAccount?: OpenSeaAccount
   takerAccount?: OpenSeaAccount
+  paymentTokenContract?: FungibleToken
   feeRecipientAccount?: OpenSeaAccount
   cancelledOrFinalized?: boolean
   markedInvalid?: boolean
@@ -271,7 +389,12 @@ export interface Order extends UnsignedOrder, ECSignature {
   assetBundle?: OpenSeaAssetBundle
 }
 
-export interface OrderJSON {
+/**
+ * Order attributes, including orderbook-specific query options
+ * See https://docs.opensea.io/reference#retrieving-orders for the full
+ * list of API query parameters and documentation.
+ */
+export interface OrderJSON extends Partial<ECSignature> {
   exchange: string
   maker: string
   taker: string
@@ -279,12 +402,13 @@ export interface OrderJSON {
   takerRelayerFee: string
   makerProtocolFee: string
   takerProtocolFee: string
+  makerReferrerFee: string
   feeRecipient: string
-  feeMethod: FeeMethod
-  side: OrderSide
-  saleKind: SaleKind
+  feeMethod: number
+  side: number
+  saleKind: number
   target: string
-  howToCall: HowToCall
+  howToCall: number
   calldata: string
   replacementPattern: string
   staticTarget: string
@@ -292,31 +416,37 @@ export interface OrderJSON {
   paymentToken: string
   basePrice: string
   extra: string
+
+  // createdTime is undefined when order hasn't been posted yet
+  createdTime?: number | string
   listingTime: number | string
   expirationTime: number | string
+
   salt: string
 
   metadata: {
-    asset: WyvernAsset;
-    schema: WyvernSchemaName;
+    asset?: WyvernAsset
+    bundle?: WyvernBundle
+    schema: WyvernSchemaName
   }
 
   hash: string
+}
 
-  // In future, make signature required
-  v?: number
-  r?: string
-  s?: string
-
-  /**
-   * Attrs used by orderbook to make queries easier
-   * Includes `maker`, `taker` and `side` from above
-   */
+/**
+ * Query interface for Orders
+ * Includes `maker`, `taker` and `side` from above
+ * See https://docs.opensea.io/reference#retrieving-orders for
+ * full docs.
+ */
+export interface OrderQuery extends Partial<OrderJSON> {
   owner?: string,
   sale_kind?: SaleKind,
   asset_contract_address?: string,
   payment_token_address?: string,
+  only_english?: boolean
   bundled?: boolean
+  include_invalid?: boolean
   token_id?: number | string
   token_ids?: Array<number | string>
   // This means listing_time > value in seconds
@@ -327,9 +457,10 @@ export interface OrderJSON {
   offset?: number
 }
 
-// IN PROGRESS
-export interface OpenSeaAssetJSON {
-  // For querying
+/**
+ * Query interface for Assets
+ */
+export interface OpenSeaAssetQuery {
   owner?: string
   asset_contract_address?: string
   token_ids?: Array<number | string>
@@ -338,6 +469,16 @@ export interface OpenSeaAssetJSON {
   order_direction?: string
   limit?: number
   offset?: number
+}
+
+/**
+ * Query interface for Fungible Tokens
+ */
+export interface FungibleTokenQuery extends Partial<FungibleToken> {
+  limit?: number
+  offset?: number
+  // Typescript bug requires this duplication
+  symbol?: string
 }
 
 export interface OrderbookResponse {

@@ -1,10 +1,10 @@
 {
   "name": "opensea-js",
-  "version": "0.4.0-rc2",
+  "version": "0.5.0-rc5",
   "description": "JavaScript SDK for the OpenSea marketplace. Let users buy or sell crypto collectibles and other cryptogoods, all on your own site!",
   "main": "lib/index.js",
   "scripts": {
-    "test": "./node_modules/.bin/mocha test/*.ts --require ts-node/register --timeout 10000",
+    "test": "./node_modules/.bin/mocha test/*.ts --require ts-node/register --timeout 15000",
     "lint": "tslint --project . 'src/**/*.ts' --fix",
     "build": "npm run lint && tsc",
     "docs": "npm run docsHtml",
@@ -42,10 +42,10 @@
     "json-loader": "^0.5.7",
     "lodash": "^4.17.4",
     "query-string": "^6.1.0",
-    "web3": "^0.20.4",
+    "web3": "^0.20.6",
     "webpack": "^3.10.0",
-    "wyvern-js": "github:ProjectOpenSea/wyvern-js",
-    "wyvern-schemas": "github:ProjectOpenSea/wyvern-schemas"
+    "wyvern-js": "github:ProjectOpenSea/wyvern-js#v3.0.2",
+    "wyvern-schemas": "github:ProjectOpenSea/wyvern-schemas#v0.8.1"
   },
   "devDependencies": {
     "@types/chai": "^4.1.3",

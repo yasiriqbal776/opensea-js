@@ -9,7 +9,7 @@ import {
 } from 'mocha-typescript'
 
 import { ORDERBOOK_VERSION } from '../src/api'
-import { Order, OrderSide } from '../src/types'
+import { Order, OrderSide, OrderJSON } from '../src/types'
 import { orderToJSON } from '../src'
 import { mainApi, rinkebyApi, apiToTest, ALEX_ADDRESS, CK_RINKEBY_TOKEN_ID, CK_RINKEBY_ADDRESS, CK_RINKEBY_SELLER_FEE } from './constants'
 
@@ -18,6 +18,19 @@ suite('api', () => {
   test('API has correct base url', () => {
     assert.equal(mainApi.apiBaseUrl, 'https://api.opensea.io')
     assert.equal(rinkebyApi.apiBaseUrl, 'https://rinkeby-api.opensea.io')
+  })
+
+  test('API fetches bundles and prefetches sell orders', async () => {
+    const { bundles } = await apiToTest.getBundles({asset_contract_address: CK_RINKEBY_ADDRESS, on_sale: true})
+    assert.isArray(bundles)
+
+    const bundle = bundles[0]
+    assert.isNotNull(bundle)
+    if (!bundle) {
+      return
+    }
+    assert.include(bundle.assets.map(a => a.assetContract.name), "CryptoKittiesRinkeby")
+    assert.isNotEmpty(bundle.sellOrders)
   })
 
   // Skip these tests, since many are redundant with other tests
@@ -146,28 +159,24 @@ suite('api', () => {
     })
   })
 
-  test('API fetches bundles and prefetches sell orders', async () => {
-    const { bundles } = await apiToTest.getBundles({asset_contract_address: CK_RINKEBY_ADDRESS, on_sale: true})
-    assert.isArray(bundles)
-
-    const bundle = bundles[0]
-    assert.isNotNull(bundle)
-    if (!bundle) {
-      return
-    }
-    assert.include(bundle.assets.map(a => a.assetContract.name), "CryptoKittiesRinkeby")
-    assert.isNotEmpty(bundle.sellOrders)
-  })
-
   test('API handles errors', async () => {
+    // 401 Unauthorized
     try {
       await apiToTest.get('/user')
     } catch (error) {
       assert.include(error.message, "Unauthorized")
     }
 
-    // Get an old order to make sure listing time is too early
+    // 404 Not found
+    try {
+      await apiToTest.get(`/asset/${CK_RINKEBY_ADDRESS}/0`)
+    } catch (error) {
+      assert.include(error.message, "Not found")
+    }
+
+    // 400 malformed
     const res = await apiToTest.getOrders({
+      // Get an old order to make sure listing time is too early
       listed_before: Math.round(Date.now() / 1000 - 3600)
     })
     const order = res.orders[0]
@@ -185,5 +194,4 @@ suite('api', () => {
       assert.include(error.message, "Expected the listing time to be at or past the current time")
     }
   })
-
 })

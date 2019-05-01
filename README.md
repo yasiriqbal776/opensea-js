@@ -5,20 +5,29 @@
 [![https://badges.frapsoft.com/os/mit/mit.svg?v=102](https://badges.frapsoft.com/os/mit/mit.svg?v=102)](https://opensource.org/licenses/MIT)
 <!-- [![npm](https://img.shields.io/npm/v/wyvern-js.svg)](https://www.npmjs.com/package/wyvern-js) [![npm](https://img.shields.io/npm/dt/wyvern-js.svg)](https://www.npmjs.com/package/wyvern-js) -->
 
-A JavaScript library for crypto-native ecommerce: buying, selling, and bidding on any cryptogood. With OpenSea JS, you can easily build your own native marketplace for your ERC721 items without having to deploy your own smart contracts or backend orderbooks. [GitHub](https://github.com/ProjectOpenSea/opensea-js) | [npm](https://www.npmjs.com/package/opensea-js)
+A JavaScript library for crypto-native ecommerce: buying, selling, and bidding on any cryptogood. With OpenSea.js, you can easily build your own native marketplace for your non-fungible tokens, or NFTs. These can be ERC-721 or ERC-1155 items. You don't have to deploy your own smart contracts or backend orderbooks.
+
+Published on [GitHub](https://github.com/ProjectOpenSea/opensea-js) and [npm](https://www.npmjs.com/package/opensea-js)
 
 - [Synopsis](#synopsis)
 - [Installation](#installation)
 - [Getting Started](#getting-started)
   - [Making Offers](#making-offers)
+    - [Bidding on Multiple Assets](#bidding-on-multiple-assets)
   - [Making Auctions](#making-auctions)
+  - [Running Crowdsales](#running-crowdsales)
   - [Fetching Orders](#fetching-orders)
   - [Buying Items](#buying-items)
   - [Accepting Offers](#accepting-offers)
+  - [Transferring Items (Gifting)](#transferring-items-gifting)
+- [Affiliate Program](#affiliate-program)
+  - [Referring Listings](#referring-listings)
+  - [Custom Referral Bounties](#custom-referral-bounties)
 - [Advanced](#advanced)
-  - [Affiliate Program](#affiliate-program)
+  - [Bulk Transfers](#bulk-transfers)
   - [Creating Bundles](#creating-bundles)
   - [Using ERC-20 Tokens Instead of Ether](#using-erc-20-tokens-instead-of-ether)
+  - [Private Auctions](#private-auctions)
   - [Sharing Sale Fees with OpenSea](#sharing-sale-fees-with-opensea)
   - [Listening to Events](#listening-to-events)
 - [Learning More](#learning-more)
@@ -37,12 +46,22 @@ Happy seafaring! ⛵️
 
 ## Installation
 
-In your project, run:
+We recommend switching to Node.js version 8.11 to make sure common crypto dependencies work. Execute `nvm use`, if you have Node Version Manager.
+
+Then, in your project, run:
 ```bash
 npm install --save opensea-js
 ```
 
 Install [web3](https://github.com/ethereum/web3.js) too if you haven't already.
+
+If you run into an error while building the dependencies and you're on a Mac, run this:
+
+```bash
+xcode-select --install # Install Command Line Tools if you haven't already.
+sudo xcode-select --switch /Library/Developer/CommandLineTools # Enable command line tools
+sudo npm explore npm -g -- npm install node-gyp@latest # (Optional) update node-gyp
+```
 
 ## Getting Started
 
@@ -52,6 +71,7 @@ To get started, create a new OpenSeaJS client, called an OpenSeaPort 🚢, using
 import * as Web3 from 'web3'
 import { OpenSeaPort, Network } from 'opensea-js'
 
+// This example provider won't let you make transactions, only read-only calls:
 const provider = new Web3.providers.HttpProvider('https://mainnet.infura.io')
 
 const seaport = new OpenSeaPort(provider, {
@@ -59,31 +79,103 @@ const seaport = new OpenSeaPort(provider, {
 })
 ```
 
+**NOTE:** Using the sample Infura provider above won't let you authorize transactions, which are needed when approving and trading assets and currency. To make transactions, you need a provider with a private key or mnemonic set.
+
+In a browser with web3 or an extension like [MetaMask](https://metamask.io/) or [Dapper](http://www.meetdapper.com/), you can use `window.ethereum` (or `window.web3.currentProvider` for legacy mobile web3 browsers) to access the native provider. In a Node.js script, you can follow [this example](https://github.com/ProjectOpenSea/opensea-creatures/blob/master/scripts/sell.js) to use a custom mnemonic.
+
 ### Making Offers
 
 Then, you can do this to make an offer on an asset:
 
 ```JavaScript
-// An expirationTime of 0 means it will never expire
-const offer = await seaport.createBuyOrder({ tokenId, tokenAddress, accountAddress, startAmount, expirationTime: 0 })
+// Token ID and smart contract address for a non-fungible token:
+const { tokenId, tokenAddress } = YOUR_ASSET
+// The offerer's wallet address:
+const accountAddress = "0x1234..."
+
+const offer = await seaport.createBuyOrder({
+  tokenId,
+  tokenAddress,
+  accountAddress,
+  // Value of the offer, in units of the payment token (or wrapped ETH if none is specified):
+  startAmount: 1.2,
+  // Read below for other options
+})
 ```
 
 When you make an offer on an item owned by an OpenSea user, **that user will automatically get an email notifying them with the offer amount**, if it's above their desired threshold.
+
+#### Bidding on Multiple Assets
+
+You can also make an offer on a bundle of assets. This could also be used for creating a bounty for whoever can acquire a list of items. Here's how you do it:
+
+```JavaScript
+const assets = YOUR_ASSETS
+const offer = await seaport.createBundleBuyOrder({
+  tokenIds: assets.map(a => a.tokenId),
+  tokenAddresses: assets.map(a => a.tokenAddress),
+  accountAddress,
+  startAmount: 2.4,
+  // Optional expiration time for the order, in Unix time (seconds):
+  expirationTime: (Date.now() / 1000 + 60 * 60 * 24) // One day from now
+})
+```
+
+When you bid on multiple assets, an email will be sent to the owner if a bundle exists on OpenSea that contains the assets. In the future, OpenSea will send emails to multiple owners if the assets aren't all owned by the same wallet.
 
 ### Making Auctions
 
 To sell an asset, call `createSellOrder`. You can do a fixed-price sale, where `startAmount` is equal to `endAmount`, or a declining [Dutch auction](https://en.wikipedia.org/wiki/Dutch_auction), where `endAmount` is lower and the price declines until `expirationTime` is hit:
 
 ```JavaScript
-// Expire this auction one day from now
+// Expire this auction one day from now.
+// Note that we convert from the JavaScript timestamp (milliseconds):
 const expirationTime = (Date.now() / 1000 + 60 * 60 * 24)
-// If `endAmount` is specified, the order will decline in value to that amount until `expirationTime`. Otherwise, it's a fixed-price order.
-const auction = await seaport.createSellOrder({ tokenId, tokenAddress, accountAddress, startAmount, endAmount, expirationTime })
+
+const auction = await seaport.createSellOrder({
+  tokenId,
+  tokenAddress,
+  accountAddress,
+  startAmount: 3,
+  // If `endAmount` is specified, the order will decline in value to that amount until `expirationTime`. Otherwise, it's a fixed-price order:
+  endAmount: 0.1,
+  expirationTime
+})
 ```
 
 The units for `startAmount` and `endAmount` are Ether, ETH. If you want to specify another ERC-20 token to use, see [Using ERC-20 Tokens Instead of Ether](#using-erc-20-tokens-instead-of-ether).
 
 See [Listening to Events](#listening-to-events) to respond to the setup transactions that occur the first time a user sells an item.
+
+### Running Crowdsales
+
+You can now sell items to users **without having to pay gas to mint them**!
+
+To create a presale or crowdsale and create batches of sell orders for a single asset factory, first follow the [tutorial](https://docs.opensea.io/docs/opensea-initial-item-sale-tutorial) for creating your crowdsale contract.
+
+Then call `createFactorySellOrders` with your factory contract address and asset option identifier, and set `numberOfOrders` to the number of assets you'd like to let users buy and mint:
+
+```JavaScript
+// Expire these auctions one day from now
+const expirationTime = (Date.now() / 1000 + 60 * 60 * 24)
+
+const sellOrders = await seaport.createFactorySellOrders({
+  assetId: ASSET_OPTION_ID,
+  factoryAddress: FACTORY_CONTRACT_ADDRESS,
+  accountAddress,
+  startAmount,
+  endAmount,
+  expirationTime,
+  // Will create 100 sell orders in parallel batches of 10, to speed things up:
+  numberOfOrders: 100
+})
+```
+
+Here's an [example script](https://github.com/ProjectOpenSea/opensea-creatures/blob/master/scripts/sell.js) you can use to mint items.
+
+**NOTE:** If `numberOfOrders` is greater than 5, we will automatically batch them in groups of 5 so you can post orders in parallel. Requires an `apiKey` to be set during seaport initialization in order to not be throttled by the API.
+
+Games using this method include [Coins & Steel](https://opensea.io/assets/coins&steelfounderssale) and a couple in stealth :) If you have questions or want support, contact us at contact@opensea.io (or in [Discord](https://discord.gg/ga8EJbv)).
 
 ### Fetching Orders
 
@@ -109,7 +201,9 @@ const { orders, count } = await seaport.api.getOrders({
 
 Note that the listing price of an asset is equal to the `currentPrice` of the **lowest valid sell order** on the asset. Users can lower their listing price without invalidating previous sell orders, so all get shipped down until they're cancelled or one is fulfilled.
 
-The available API filters for the orders endpoint is documented in the `OrderJSON` interface:
+To learn more about signatures, makers, takers, listingTime vs createdTime and other kinds of order terminology, please read the [**Terminology Section**](https://docs.opensea.io/reference#terminology) of the API Docs.
+
+The available API filters for the orders endpoint is documented in the `OrderJSON` interface below, but see the main [API Docs](https://docs.opensea.io/reference#reference-getting-started) for a playground, along with more up-to-date and detailed explanantions.
 
 ```TypeScript
 /**
@@ -156,13 +250,30 @@ await this.props.seaport.fulfillOrder({ order, accountAddress })
 
 If the order is a buy order (`order.side === OrderSide.Buy`), then the taker is the *owner* and this will prompt the owner to exchange their item(s) for whatever is being offered in return. See [Listening to Events](#listening-to-events) below to respond to the setup transactions that occur the first time a user accepts a bid.
 
-## Advanced
+### Transferring Items (Gifting)
 
-Interested in making an affiliate program, bundling items together, or making bids in different ERC-20 tokens? OpenSea.js can help with that.
+A handy feature in OpenSea.js is the ability to transfer any supported asset (not just non-fungible tokens) in one line of JavaScript.
 
-### Affiliate Program
+To transfer an ERC-721 asset or an ERC-1155 asset, it's just one call:
 
-**NOTE:** This feature is in beta.
+```JavaScript
+
+const transactionHash = await seaport.transferOne({
+  asset: { tokenId, tokenAddress },
+  fromAddress, // Must own the asset
+  toAddress
+})
+```
+
+To transfer other types of assets, like ENS names, you can pass in a WyvernAsset as the `asset`, set a `schemaName`, and set `isWyvernAsset` to `true`. For more information, check out the documentation for WyvernSchemas on https://projectopensea.github.io/opensea-js/.
+
+## Affiliate Program
+
+New in version 0.4, OpenSea.js allows to you easily create an affiliate program in just a few lines of JavaScript! It's the crypto-equivalent of bounty hunting 💰
+
+You can use this to **win at least 1%** of the sale price of any listing, both for assets and bundles. You can also allow users to win bounties by referring your items for sale.
+
+### Referring Listings
 
 You can instantly create an affiliate program for your assets by just passing in one more parameter when fulfilling orders! Whenever someone refers a sale or the acceptance of an offer, you can add a `referrerAddress` to give their wallet credit:
 
@@ -171,15 +282,60 @@ const referrerAddress = "0x..." // The referrer's wallet address
 await this.props.seaport.fulfillOrder({ order, accountAddress, referrerAddress })
 ```
 
-This works for buying assets and bundles, along with accepting bids!
+This works for buying assets and bundles, along with accepting bids.
 
-OpenSea will send the referrer **1%** of the item's sale price. Soon, if you've customized your fees using the storefront editor, you'll be able to set an amount that you can send referrers as well.
+OpenSea will send the referrer an email congradulating them, along with **1%** of the item's sale price.
 
-More information will appear here when our redesigned affiliate program is ready. In the meantime, contact us at contact@opensea.io (or in [Discord](https://discord.gg/ga8EJbv)), or use our legacy affiliate program at https://opensea.io/account#referrals.
+### Custom Referral Bounties
+
+Sellers can customize the bounties they add to their items when listing them for sale. By default, OpenSea will pay referrers 1% and sellers pay them nothing, but sellers can increase this up to the full OpenSea fee (currently 2.5% for most assets) for both assets and bundles:
+
+```JavaScript
+// Price the Genesis CryptoKitty at 100 ETH
+const startAmount = 100
+// Reward referrers with 10% of the final sale price,
+// or 10 ETH in this case
+const extraBountyPercent = 10
+// The final bounty will be 10% + 1% from OpenSea, or 11 ETH!
+
+const auction = await seaport.createSellOrder({
+  tokenAddress: "0x06012c8cf97bead5deae237070f9587f8e7a266d", // CryptoKitties
+  tokenId: "1", // Token ID
+  accountAddress: OWNERS_WALLET_ADDRESS,
+  startAmount,
+  extraBountyBasisPoints: extraBountyPercent * 100
+})
+```
+
+**NOTE:** The final bounty in the example above will be 10% from the seller plus 1% from OpenSea, or 11 ETH in total!
+
+Developers can request to increase the OpenSea fee to allow for higher bounties - by default, it's capped at 2.5%. If you have any questions, contact us at contact@opensea.io (or in [Discord](https://discord.gg/ga8EJbv)), or join the program at https://opensea.io/account#referrals.
+
+## Advanced
+
+Interested in making bundling items together or making bids in different ERC-20 tokens? OpenSea.js can help with that.
+
+### Bulk Transfers
+
+A handy feature in OpenSea.js is the ability to transfer multiple items at once in a single transaction. This works by grouping together as many `transferFrom` calls as the Ethereum gas limit allows, which is usually under 30 items, for most item contracts.
+
+To make a bulk transfer, it's just one call:
+
+```JavaScript
+const assets: Array<{tokenId: string; tokenAddress: string}> = [...]
+
+const transactionHash = await seaport.transferAll({
+  assets,
+  fromAddress, // Must own all the assets
+  toAddress
+})
+```
+
+This will automatically approve the assets for trading and confirm the transaction for sending them.
 
 ### Creating Bundles
 
-New in version 0.2.9, you can create bundles of assets to sell at the same time! If the owner has approved all the assets in the bundle already, only a signature is needed to create it.
+You can also create bundles of assets to sell at the same time! If the owner has approved all the assets in the bundle already, only a signature is needed to create it.
 
 To make a bundle, it's just one call:
 
@@ -187,7 +343,9 @@ To make a bundle, it's just one call:
 const assets: Array<{tokenId: string; tokenAddress: string}> = [...]
 
 const bundle = await seaport.createBundleSellOrder({
-  bundleName, bundleDescription, bundleExternalLink, assets, accountAddress, startAmount, endAmount, expirationTime, paymentTokenAddress
+  bundleName, bundleDescription, bundleExternalLink,
+  assets, accountAddress, startAmount, endAmount,
+  expirationTime, paymentTokenAddress
 })
 ```
 
@@ -213,7 +371,6 @@ const auction = await seaport.createSellOrder({
   tokenId: "1", // Token ID
   accountAddress: OWNERS_WALLET_ADDRESS,
   startAmount: 100,
-  expirationTime: 0,
   paymentTokenAddress
 })
 ```
@@ -233,6 +390,25 @@ const order = await seaport.api.getOrders({
 
 * MANA, Decentraland's currency: https://etherscan.io/token/0x0f5d2fb29fb7d3cfee444a200298f468908cc942 
 * DAI, Maker's stablecoin, pegged to $1 USD: https://etherscan.io/token/0x89d24a6b4ccb1b6faa2625fe562bdd9a23260359
+
+### Private Auctions
+
+Now you can make auctions and listings that can only be fulfilled by an address of your choosing. This allows you to negotiate a price in some channel and sell for your chosen price on OpenSea, **without having to trust that the counterparty will abide by your terms!**
+
+Here's an example of listing a Decentraland parcel for 10 ETH with a specific buyer address allowed to take it. No more needing to worry about whether they'll give you enough back!
+
+```JavaScript
+// Address allowed to buy from you
+const buyerAddress = "0x123..."
+
+const listing = await seaport.createSellOrder({
+  tokenAddress: "0xf87e31492faf9a91b02ee0deaad50d51d56d5d4d", // Decentraland
+  tokenId: "115792089237316195423570985008687907832853042650384256231655107562007036952461", // Token ID
+  accountAddress: OWNERS_WALLET_ADDRESS,
+  startAmount: 10,
+  buyerAddress
+})
+```
 
 ### Sharing Sale Fees with OpenSea
 
@@ -268,6 +444,10 @@ handleSeaportEvents() {
         dispatch({ type: ActionTypes.RESET_EXCHANGE })
       }
     })
+    openSeaPort.addListener(EventType.TransactionDenied, ({ transactionHash, event }) => {
+      console.info({ transactionHash, event })
+      dispatch({ type: ActionTypes.RESET_EXCHANGE })
+    })
     openSeaPort.addListener(EventType.TransactionFailed, ({ transactionHash, event }) => {
       console.info({ transactionHash, event })
       dispatch({ type: ActionTypes.RESET_EXCHANGE })
@@ -299,6 +479,10 @@ handleSeaportEvents() {
     openSeaPort.addListener(EventType.CreateOrder, ({ order, accountAddress }) => {
       console.info({ order, accountAddress })
       dispatch({ type: ActionTypes.CREATE_ORDER })
+    })
+    openSeaPort.addListener(EventType.OrderDenied, ({ order, accountAddress }) => {
+      console.info({ order, accountAddress })
+      dispatch({ type: ActionTypes.RESET_EXCHANGE })
     })
     openSeaPort.addListener(EventType.MatchOrders, ({ buy, sell, accountAddress }) => {
       console.info({ buy, sell, accountAddress })
