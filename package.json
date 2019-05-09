@@ -1,8 +1,9 @@
 {
-  "name": "opensea-js",
+  "name": "opensea-js-darwin",
   "version": "0.5.0-rc5",
   "description": "JavaScript SDK for the OpenSea marketplace. Let users buy or sell crypto collectibles and other cryptogoods, all on your own site!",
   "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "scripts": {
     "test": "./node_modules/.bin/mocha test/*.ts --require ts-node/register --timeout 15000",
     "lint": "tslint --project . 'src/**/*.ts' --fix",
@@ -13,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ProjectOpenSea/opensea-js.git"
+    "url": "git+https://github.com/yasiriqbal776/opensea-js.git"
   },
   "keywords": [
     "marketplace",
@@ -31,7 +32,7 @@
   "author": "OpenSea Developers",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ProjectOpenSea/opensea-js/issues"
+    "url": "https://github.com/yasiriqbal776/opensea-js.git/issues"
   },
   "homepage": "https://docs.opensea.io/v1.0/reference",
   "dependencies": {
@@ -54,6 +55,7 @@
     "@types/node": "^9.3.0",
     "@types/node-fetch": "^2.1.2",
     "@types/query-string": "^6.1.0",
+    "@types/web3": "^1.0.18",
     "chai": "^4.1.2",
     "mocha": "^5.2.0",
     "mocha-typescript": "^1.1.15",

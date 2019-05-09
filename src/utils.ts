@@ -400,8 +400,8 @@ export async function personalSignAsync(web3: Web3, message: string, signerAddre
   ): Promise<ECSignature | null> {
 
   const signature = await promisify<Web3.JSONRPCResponsePayload>(c => web3.currentProvider.sendAsync({
-      method: 'personal_sign', // 'eth_signTypedData',
-      params: [message, signerAddress],
+      method: 'eth_sign', // 'eth_signTypedData',
+      params: [signerAddress,message],
       from: signerAddress,
     } as any, c)
   )
